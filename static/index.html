@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Business Schema Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 40px;
+            text-align: center;
+            border-radius: 20px;
+            margin-bottom: 40px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 40px;
+        }
+
+        .input-section {
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 1rem;
+        }
+
+        .url-input {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .url-input:focus {
+            outline: none;
+            border-color: #4285f4;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.1);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(66, 133, 244, 0.3);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #5f6368;
+            border: 2px solid #e1e5e9;
+        }
+
+        .btn-secondary:hover {
+            background: #e8f0fe;
+            border-color: #4285f4;
+            color: #4285f4;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-weight: 500;
+            color: #333;
+            gap: 10px;
+        }
+        
+        .checkbox-input {
+            width: 18px;
+            height: 18px;
+            border: 2px solid #e1e5e9;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .checkbox-input:checked {
+            background-color: #4285f4;
+            border-color: #4285f4;
+        }
+        
+        .checkbox-input:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.1);
+        }
+        
+        .checkbox-text {
+            font-size: 0.95rem;
+            color: #5f6368;
+        }
+        
+        .char-counter {
+            text-align: right;
+            font-size: 0.85rem;
+            color: #5f6368;
+            margin-top: 5px;
+        }
+        
+        .char-counter.warning {
+            color: #ea4335;
+        }
+
+        .output-section {
+            margin-top: 30px;
+        }
+
+        .output-textarea {
+            width: 100%;
+            min-height: 400px;
+            padding: 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 12px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            background: #f8f9fa;
+            resize: vertical;
+        }
+
+        .output-textarea:focus {
+            outline: none;
+            border-color: #4285f4;
+            background: white;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #5f6368;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4285f4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #fce8e6;
+            color: #d93025;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #d93025;
+        }
+
+        .success {
+            background: #e6f4ea;
+            color: #137333;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #137333;
+        }
+
+        .example {
+            background: #e8f0fe;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #4285f4;
+        }
+
+        .example-title {
+            font-weight: 600;
+            color: #1a73e8;
+            margin-bottom: 8px;
+        }
+
+        .example-url {
+            font-family: monospace;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            color: #5f6368;
+            word-break: break-all;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .btn {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏢 Google Business Schema Generator</h1>
+            <p>将 Google Business 分享链接转换为 Schema.org 结构化数据</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="input-section">
+                <div class="input-group">
+                    <label for="urlInput">Google Business 分享链接</label>
+                    <input 
+                        type="url" 
+                        id="urlInput" 
+                        class="url-input" 
+                        placeholder="请输入 Google Business 分享链接，例如：https://maps.app.goo.gl/XCLKuyn4vj9qrijE7"
+                    >
+                </div>
+                
+                <div class="input-group">
+                    <label for="descriptionInput">自定义描述（可选）</label>
+                    <textarea 
+                        id="descriptionInput" 
+                        class="url-input" 
+                        placeholder="请输入商家的自定义描述，最多500个字符..."
+                        maxlength="500"
+                        rows="3"
+                        style="resize: vertical; min-height: 80px;"
+                    ></textarea>
+                    <div class="char-counter" id="charCounter">0/500</div>
+                </div>
+                
+                <div class="input-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="forceRefreshCheckbox" class="checkbox-input">
+                        <span class="checkbox-text">强制刷新（忽略缓存）</span>
+                    </label>
+                </div>
+                
+                <div class="button-group">
+                    <button id="generateBtn" class="btn btn-primary">
+                        <span>🚀</span>
+                        生成 Schema
+                    </button>
+                    <button id="clearBtn" class="btn btn-secondary">
+                        <span>🗑️</span>
+                        清空
+                    </button>
+                    <button id="copyBtn" class="btn btn-secondary">
+                        <span>📋</span>
+                        复制结果
+                    </button>
+                </div>
+                
+                <div class="example">
+                    <div class="example-title">示例链接：</div>
+                    <div class="example-url">https://maps.app.goo.gl/XCLKuyn4vj9qrijE7</div>
+                </div>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                正在抓取和生成 Schema 数据，请稍候...
+            </div>
+            
+            <div class="output-section">
+                <label for="outputTextarea">生成的 Schema.org JSON-LD</label>
+                <textarea 
+                    id="outputTextarea" 
+                    class="output-textarea" 
+                    placeholder="生成的 Schema.org JSON-LD 将显示在这里..."
+                    readonly
+                ></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const urlInput = document.getElementById('urlInput');
+        const descriptionInput = document.getElementById('descriptionInput');
+        const charCounter = document.getElementById('charCounter');
+        const generateBtn = document.getElementById('generateBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const forceRefreshCheckbox = document.getElementById('forceRefreshCheckbox');
+        const outputTextarea = document.getElementById('outputTextarea');
+        const loading = document.getElementById('loading');
+        
+        // 字符计数器
+        descriptionInput.addEventListener('input', () => {
+            const length = descriptionInput.value.length;
+            charCounter.textContent = `${length}/500`;
+            
+            if (length > 450) {
+                charCounter.classList.add('warning');
+            } else {
+                charCounter.classList.remove('warning');
+            }
+        });
+
+        // 生成 Schema
+        generateBtn.addEventListener('click', async () => {
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                showMessage('请输入 Google Business 分享链接', 'error');
+                return;
+            }
+            
+            if (!isValidGoogleBusinessUrl(url)) {
+                showMessage('请输入有效的 Google Business 分享链接', 'error');
+                return;
+            }
+            
+            setLoading(true);
+            
+            try {
+                const description = descriptionInput.value.trim();
+                
+                const response = await fetch('/api/extract', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        url: url,
+                        force_refresh: forceRefreshCheckbox.checked,
+                        description: description || null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    outputTextarea.value = data.script;
+                    showMessage('Schema 生成成功！', 'success');
+                } else {
+                    throw new Error(data.detail || '生成失败');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage(`生成失败: ${error.message}`, 'error');
+                outputTextarea.value = '';
+            } finally {
+                setLoading(false);
+            }
+        });
+        
+        // 清空
+        clearBtn.addEventListener('click', () => {
+            urlInput.value = '';
+            descriptionInput.value = '';
+            charCounter.textContent = '0/500';
+            charCounter.classList.remove('warning');
+            outputTextarea.value = '';
+            forceRefreshCheckbox.checked = false;
+            removeMessages();
+        });
+        
+        // 复制结果
+        copyBtn.addEventListener('click', async () => {
+            if (!outputTextarea.value) {
+                showMessage('没有可复制的内容', 'error');
+                return;
+            }
+            
+            try {
+                await navigator.clipboard.writeText(outputTextarea.value);
+                showMessage('已复制到剪贴板', 'success');
+            } catch (error) {
+                // 降级方案
+                outputTextarea.select();
+                document.execCommand('copy');
+                showMessage('已复制到剪贴板', 'success');
+            }
+        });
+        
+        // 回车键生成
+        urlInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                generateBtn.click();
+            }
+        });
+        
+        // 工具函数
+        function isValidGoogleBusinessUrl(url) {
+            const patterns = [
+                /^https:\/\/maps\.app\.goo\.gl\/.+/,
+                /^https:\/\/goo\.gl\/maps\/.+/,
+                /^https:\/\/www\.google\.com\/maps\/.+/,
+                /^https:\/\/maps\.google\.com\/.+/
+            ];
+            return patterns.some(pattern => pattern.test(url));
+        }
+        
+        function setLoading(isLoading) {
+            if (isLoading) {
+                loading.classList.add('show');
+                generateBtn.disabled = true;
+                generateBtn.innerHTML = '<span>⏳</span> 生成中...';
+            } else {
+                loading.classList.remove('show');
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = '<span>🚀</span> 生成 Schema';
+            }
+        }
+        
+        function showMessage(message, type) {
+            removeMessages();
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            
+            const inputSection = document.querySelector('.input-section');
+            inputSection.appendChild(messageDiv);
+            
+            // 3秒后自动移除
+            setTimeout(() => {
+                removeMessages();
+            }, 3000);
+        }
+        
+        function removeMessages() {
+            const messages = document.querySelectorAll('.error, .success');
+            messages.forEach(msg => msg.remove());
+        }
+    </script>
+</body>
+</html>
