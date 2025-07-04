@@ -42,12 +42,25 @@
 
 3. **安装 Playwright 浏览器**
    ```bash
-   playwright install
+   playwright install-deps
+   playwright install chromium
    ```
 
 4. **启动应用**
+   
+   **方式一：标准启动**
    ```bash
-   python -m uvicorn app.main:app --reload
+   python run.py
+   ```
+   
+   **方式二：无头模式启动（推荐服务器环境）**
+   ```bash
+   python run_headless.py
+   ```
+   
+   **方式三：完整服务启动（包含监控）**
+   ```bash
+   python start_with_monitor.py
    ```
 
 5. **访问应用**
@@ -136,14 +149,31 @@ localbusiness/
 │   ├── crawler.py           # 网页爬虫核心逻辑
 │   ├── models.py            # 数据模型定义
 │   ├── schema_generator.py  # Schema.org 数据生成器
+│   ├── cache.py             # 缓存管理
+│   ├── middleware.py        # 中间件
+│   ├── stats.py             # 统计功能
 │   └── utils.py             # 工具函数
 ├── static/
 │   ├── index.html          # 前端页面
-│   ├── style.css           # 样式文件
-│   └── script.js           # 前端脚本
+│   ├── monitor.html        # 监控页面
+│   └── stats.html          # 统计页面
+├── tests/                  # 测试文件
+│   ├── __init__.py
+│   ├── conftest.py
+│   ├── test_api_extract.py
+│   └── test_response_format.py
+├── run.py                  # 标准启动脚本
+├── run_headless.py         # 无头模式启动脚本
+├── start_with_monitor.py   # 完整服务启动脚本
+├── fix_playwright_deps.py  # Playwright依赖修复脚本
+├── monitor.py              # 监控服务
 ├── requirements.txt        # Python 依赖
+├── docker-compose.yml      # Docker Compose 配置
+├── Dockerfile             # Docker 配置
 ├── README.md              # 项目说明
-└── Dockerfile             # Docker 配置
+├── MONITOR_README.md       # 监控功能说明
+├── REDIS_SETUP.md          # Redis 配置说明
+└── TESTING.md              # 测试说明
 ```
 
 ## 核心功能
@@ -188,23 +218,66 @@ USER_AGENT = "..."         # 自定义 User Agent
 
 ## 部署
 
-### Docker 部署
+### Docker 部署（推荐）
 
-1. **构建镜像**
-   ```bash
-   docker build -t localbusiness .
-   ```
+**方式一：使用 Docker Compose（推荐）**
+```bash
+# 启动所有服务
+docker-compose up -d
 
-2. **运行容器**
-   ```bash
-   docker run -p 8000:8000 localbusiness
-   ```
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
+```
+
+**方式二：手动构建**
+```bash
+# 构建镜像
+docker build -t localbusiness .
+
+# 运行容器
+docker run -p 8000:8000 localbusiness
+```
+
+### 本地部署
+
+**标准启动**
+```bash
+python run.py
+```
+
+**无头模式启动（服务器环境推荐）**
+```bash
+python run_headless.py --host 0.0.0.0 --port 8000
+```
+
+**完整服务启动（包含监控）**
+```bash
+python start_with_monitor.py
+```
 
 ### 生产环境部署
 
 ```bash
 # 使用 Gunicorn 部署
 gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+
+# 或使用无头模式脚本
+python run_headless.py --host 0.0.0.0 --port 8000
+```
+
+### 依赖问题快速解决
+
+如果遇到 Playwright 依赖问题：
+
+```bash
+# 运行自动修复脚本
+python fix_playwright_deps.py
+
+# 或直接使用 Docker（推荐）
+docker-compose up -d
 ```
 
 ## 开发指南
@@ -223,21 +296,64 @@ gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 
 ### 常见问题
 
-1. **Playwright 安装失败**
+1. **Playwright 依赖缺失错误**
+   
+   **错误信息**: `Host system is missing dependencies to run browsers`
+   
+   **解决方案**:
+   
+   **方案一：自动修复（推荐）**
    ```bash
-   # 手动安装浏览器
-   python -m playwright install chromium
+   python fix_playwright_deps.py
+   ```
+   
+   **方案二：手动安装**
+   ```bash
+   # 安装系统依赖
+   playwright install-deps
+   
+   # 安装浏览器
+   playwright install chromium
+   
+   # 对于Ubuntu/Debian系统
+   sudo apt-get update
+   sudo apt-get install -y libatk-bridge2.0-0 libatspi2.0-0 libgbm1
+   
+   # 对于CentOS/RHEL系统
+   sudo yum install -y atk at-spi2-atk mesa-libgbm
+   ```
+   
+   **方案三：Docker部署（强烈推荐）**
+   ```bash
+   docker-compose up -d
    ```
 
-2. **页面加载超时**
+2. **Playwright 安装失败**
+   ```bash
+   # 升级pip和setuptools
+   pip install --upgrade pip setuptools wheel
+   
+   # 重新安装Playwright
+   pip install --upgrade playwright
+   playwright install chromium
+   ```
+
+3. **页面加载超时**
    - 检查网络连接
    - 增加 `PAGE_LOAD_TIMEOUT` 值
    - 确认 Google Maps 链接有效
+   - 尝试无头模式启动: `python run_headless.py`
 
-3. **信息提取不完整**
+4. **信息提取不完整**
    - 检查页面结构是否发生变化
    - 查看日志获取详细错误信息
    - 尝试不同的 Google Maps 链接格式
+
+5. **服务器环境部署问题**
+   - 使用无头模式: `python run_headless.py`
+   - 检查系统架构兼容性
+   - 考虑使用Docker部署
+   - 确保有足够的系统资源
 
 ### 日志调试
 

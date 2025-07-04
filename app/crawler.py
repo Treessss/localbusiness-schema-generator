@@ -56,25 +56,73 @@ class GoogleBusinessCrawler:
             
         logger.info("正在启动浏览器实例...")
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(
-            headless=self.headless,
-            args=[
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-blink-features=AutomationControlled',
-                '--disable-features=VizDisplayCompositor',
-                '--disable-web-security',
-                '--disable-features=TranslateUI',
-                '--disable-ipc-flooding-protection',
-                '--no-first-run',
-                '--no-default-browser-check',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding'
-            ]
-        )
-        self._is_started = True
-        logger.info("浏览器实例启动成功")
+        
+        # 配置浏览器启动参数，针对服务器环境优化
+        browser_args = [
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=VizDisplayCompositor',
+            '--disable-web-security',
+            '--disable-features=TranslateUI',
+            '--disable-ipc-flooding-protection',
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-gpu',
+            '--disable-software-rasterizer',
+            '--disable-extensions',
+            '--disable-plugins',
+            '--disable-images',
+            '--disable-javascript',
+            '--disable-default-apps',
+            '--disable-sync',
+            '--disable-translate',
+            '--hide-scrollbars',
+            '--mute-audio',
+            '--no-zygote',
+            '--single-process'
+        ]
+        
+        try:
+            self.browser = await self.playwright.chromium.launch(
+                headless=True,  # 强制无头模式
+                args=browser_args
+            )
+            self._is_started = True
+            logger.info("浏览器实例启动成功（无头模式）")
+        except Exception as e:
+            logger.error(f"浏览器启动失败: {e}")
+            # 检查是否是依赖缺失错误
+            if "Host system is missing dependencies" in str(e) or "dependencies to run browsers" in str(e):
+                logger.error("检测到系统缺少Playwright浏览器依赖")
+                logger.error("请运行以下命令安装依赖:")
+                logger.error("1. playwright install-deps")
+                logger.error("2. playwright install chromium")
+                logger.error("或者使用Docker部署以避免依赖问题")
+                raise RuntimeError("系统缺少Playwright浏览器依赖。请安装依赖或使用Docker部署。")
+            
+            # 尝试更简化的配置
+            try:
+                logger.info("尝试简化配置启动浏览器...")
+                self.browser = await self.playwright.chromium.launch(
+                    headless=True,
+                    args=['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process']
+                )
+                self._is_started = True
+                logger.info("浏览器实例启动成功（简化配置）")
+            except Exception as e2:
+                logger.error(f"简化配置启动也失败: {e2}")
+                if "Host system is missing dependencies" in str(e2) or "dependencies to run browsers" in str(e2):
+                    logger.error("系统缺少Playwright浏览器依赖")
+                    logger.error("解决方案:")
+                    logger.error("1. 安装依赖: playwright install-deps && playwright install chromium")
+                    logger.error("2. 使用Docker部署（推荐）")
+                    logger.error("3. 在支持的操作系统上运行")
+                    raise RuntimeError("系统缺少Playwright浏览器依赖。请安装依赖或使用Docker部署。")
+                raise Exception(f"无法启动浏览器: {e2}")
 
     async def stop(self):
         """停止浏览器实例
