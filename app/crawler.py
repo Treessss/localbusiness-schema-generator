@@ -440,16 +440,34 @@ class GoogleBusinessCrawler:
 
             # 等待页面加载并尝试找到商家内容
             try:
+                # 检查页面和浏览器连接状态
+                if page.is_closed():
+                    raise Exception("页面已关闭")
+                if not self.browser.is_connected():
+                    raise Exception("浏览器连接已断开")
+                
                 # 首先等待页面基本加载完成
                 await page.wait_for_selector('[role="main"]', timeout=5000)
                 logger.info("页面内容已加载，找到商家主要内容区域")
             except PlaywrightTimeoutError:
                 try:
+                    # 再次检查连接状态
+                    if page.is_closed():
+                        raise Exception("页面已关闭")
+                    if not self.browser.is_connected():
+                        raise Exception("浏览器连接已断开")
+                    
                     # 备用检查：等待主要内容区域
                     await page.wait_for_selector('h1', timeout=5000)
                     logger.info("页面内容已加载，找到页面标题")
                 except PlaywrightTimeoutError:
                     logger.warning(f"未找到商家内容选择器，继续提取: {current_url}")
+            except Exception as e:
+                if "closed" in str(e).lower():
+                    logger.error(f"页面或浏览器连接已关闭: {e}")
+                    raise Exception(f"页面或浏览器连接已关闭: {e}")
+                else:
+                    raise
 
             # 提取商家信息
             business_info = await self._extract_business_data(page)
@@ -492,6 +510,11 @@ class GoogleBusinessCrawler:
         business_info = {}
 
         try:
+            # 检查页面和浏览器连接状态
+            if page.is_closed():
+                raise Exception("页面已关闭，无法提取数据")
+            if not self.browser.is_connected():
+                raise Exception("浏览器连接已断开，无法提取数据")
             # 提取商家名称
             logger.info("开始提取商家名称")
             business_info['name'] = await self._extract_business_name(page)
@@ -570,12 +593,21 @@ class GoogleBusinessCrawler:
             BeautifulSoup解析对象
         """
         try:
+            # 检查页面和浏览器连接状态
+            if page.is_closed():
+                raise Exception("页面已关闭，无法获取页面内容")
+            if not self.browser.is_connected():
+                raise Exception("浏览器连接已断开，无法获取页面内容")
+            
             html_content = await page.content()
             soup = BeautifulSoup(html_content, 'lxml')
             logger.info("成功创建BeautifulSoup对象")
             return soup
         except Exception as e:
-            logger.error(f"创建BeautifulSoup对象失败: {e}")
+            if "closed" in str(e).lower():
+                logger.error(f"页面或浏览器连接问题: {e}")
+            else:
+                logger.error(f"创建BeautifulSoup对象失败: {e}")
             raise
 
     async def _extract_business_name(self, page: Page) -> Optional[str]:
