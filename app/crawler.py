@@ -447,7 +447,8 @@ class GoogleBusinessCrawler:
                     raise Exception("浏览器连接已断开")
                 
                 # 首先等待页面基本加载完成
-                await page.wait_for_selector('[role="main"]', timeout=5000)
+                await page.wait_for_load_state('domcontentloaded', timeout=5000)
+                logger.info("页面DOM内容已加载")
                 logger.info("页面内容已加载，找到商家主要内容区域")
             except PlaywrightTimeoutError:
                 try:
