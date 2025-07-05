@@ -441,7 +441,7 @@ class GoogleBusinessCrawler:
             # 等待页面加载并尝试找到商家内容
             try:
                 # 首先等待页面基本加载完成
-                # await page.wait_for_selector('[role="main"]', timeout=5000)
+                await page.wait_for_selector('[role="main"]', timeout=5000)
                 logger.info("页面内容已加载，找到商家主要内容区域")
             except PlaywrightTimeoutError:
                 try:
@@ -547,7 +547,7 @@ class GoogleBusinessCrawler:
 
             # 提取图片
             logger.info("开始提取图片")
-            business_info['images'] = await self._extract_images(page)
+            business_info['images'] = await self._extract_business_images(page)
             logger.info(
                 f"图片提取完成，共{len(business_info['images']) if business_info['images'] else 0}张")
 
