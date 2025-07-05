@@ -42,6 +42,50 @@ class GoogleBusinessCrawler:
         self.playwright = None
         self._is_started = False
 
+    async def _warmup_browser(self):
+        """浏览器预热机制
+        
+        使用最基本的参数先启动浏览器进行预热，
+        这可以解决某些环境下复杂参数启动失败的问题。
+        """
+        logger.info("开始浏览器预热...")
+        
+        # 最基本的预热参数（与test_browser_basic.py保持一致）
+        warmup_args = [
+            '--no-sandbox',
+            '--disable-setuid-sandbox', 
+            '--disable-dev-shm-usage'
+        ]
+        
+        try:
+            # 预热浏览器
+            warmup_browser = await self.playwright.chromium.launch(
+                headless=True,
+                args=warmup_args,
+                timeout=30000
+            )
+            
+            # 创建测试页面
+            warmup_page = await warmup_browser.new_page()
+            warmup_page.set_default_timeout(10000)
+            
+            # 简单导航测试
+            await warmup_page.goto('https://www.google.com', 
+                                 wait_until='domcontentloaded', 
+                                 timeout=10000)
+            
+            logger.info("浏览器预热成功")
+            
+            # 清理预热资源
+            await warmup_page.close()
+            await warmup_browser.close()
+            
+            return True
+            
+        except Exception as e:
+            logger.warning(f"浏览器预热失败: {e}")
+            return False
+
     async def start(self):
         """启动浏览器实例
         
@@ -57,6 +101,13 @@ class GoogleBusinessCrawler:
             
         logger.info("正在启动浏览器实例...")
         self.playwright = await async_playwright().start()
+        
+        # 执行浏览器预热
+        warmup_success = await self._warmup_browser()
+        if warmup_success:
+            logger.info("浏览器预热完成，继续正常启动")
+        else:
+            logger.warning("浏览器预热失败，尝试直接启动")
         
         # 检测操作系统并配置相应的浏览器启动参数
         system_name = platform.system().lower()
@@ -226,25 +277,43 @@ class GoogleBusinessCrawler:
                 logger.error("或者使用Docker部署以避免依赖问题")
                 raise RuntimeError("系统缺少Playwright浏览器依赖。请安装依赖或使用Docker部署。")
             
-            # 尝试更简化的配置
+            # 尝试使用预热时相同的简化配置
             try:
-                logger.info("尝试简化配置启动浏览器...")
+                logger.info("尝试使用预热配置启动浏览器...")
+                warmup_args = [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox', 
+                    '--disable-dev-shm-usage'
+                ]
                 self.browser = await self.playwright.chromium.launch(
                     headless=True,
-                    args=['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--single-process']
+                    args=warmup_args,
+                    timeout=30000
                 )
                 self._is_started = True
-                logger.info("浏览器实例启动成功（简化配置）")
+                logger.info("浏览器实例启动成功（预热配置）")
             except Exception as e2:
-                logger.error(f"简化配置启动也失败: {e2}")
-                if "Host system is missing dependencies" in str(e2) or "dependencies to run browsers" in str(e2):
-                    logger.error("系统缺少Playwright浏览器依赖")
-                    logger.error("解决方案:")
-                    logger.error("1. 安装依赖: playwright install-deps && playwright install chromium")
-                    logger.error("2. 使用Docker部署（推荐）")
-                    logger.error("3. 在支持的操作系统上运行")
-                    raise RuntimeError("系统缺少Playwright浏览器依赖。请安装依赖或使用Docker部署。")
-                raise Exception(f"无法启动浏览器: {e2}")
+                logger.error(f"预热配置启动也失败: {e2}")
+                
+                # 最后尝试最基本的配置
+                try:
+                    logger.info("尝试最基本配置启动浏览器...")
+                    self.browser = await self.playwright.chromium.launch(
+                        headless=True,
+                        args=['--no-sandbox']
+                    )
+                    self._is_started = True
+                    logger.info("浏览器实例启动成功（最基本配置）")
+                except Exception as e3:
+                    logger.error(f"所有配置启动都失败: {e3}")
+                    if "Host system is missing dependencies" in str(e3) or "dependencies to run browsers" in str(e3):
+                        logger.error("系统缺少Playwright浏览器依赖")
+                        logger.error("解决方案:")
+                        logger.error("1. 安装依赖: playwright install-deps && playwright install chromium")
+                        logger.error("2. 使用Docker部署（推荐）")
+                        logger.error("3. 在支持的操作系统上运行")
+                        raise RuntimeError("系统缺少Playwright浏览器依赖。请安装依赖或使用Docker部署。")
+                    raise Exception(f"无法启动浏览器: {e3}")
 
     async def stop(self):
         """停止浏览器实例
