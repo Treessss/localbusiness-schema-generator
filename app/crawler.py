@@ -76,14 +76,26 @@ class GoogleBusinessCrawler:
             '--disable-extensions',
             '--disable-plugins',
             '--disable-images',
-            '--disable-javascript',
             '--disable-default-apps',
             '--disable-sync',
             '--disable-translate',
             '--hide-scrollbars',
             '--mute-audio',
             '--no-zygote',
-            '--single-process'
+            '--single-process',
+            '--disable-client-side-phishing-detection',
+            '--disable-logging',
+            '--disable-crash-reporter',
+            '--disable-component-update',
+            '--disable-background-networking',
+            '--disable-domain-reliability',
+            '--disable-features=MediaRouter',
+            '--disable-hang-monitor',
+            '--disable-prompt-on-repost',
+            '--disable-background-downloads',
+            '--disable-add-to-shelf',
+            '--disable-office-editing-component-app',
+            '--disable-component-extensions-with-background-pages'
         ]
         
         try:
@@ -200,9 +212,18 @@ class GoogleBusinessCrawler:
         if not self._is_started or not self.browser:
             raise RuntimeError("浏览器实例未启动，请先调用 start() 方法")
 
+        # 检查浏览器连接状态
+        if not self.browser.is_connected():
+            logger.warning("浏览器连接已断开，尝试重新启动...")
+            await self.stop()
+            await self.start()
+            if not self.browser or not self.browser.is_connected():
+                raise RuntimeError("无法重新建立浏览器连接")
+
         logger.info(f"开始提取商家信息，URL: {url}")
 
         page = await self.browser.new_page()
+        current_url = url
 
         try:
             # 设置视口和用户代理以避免检测
@@ -216,8 +237,27 @@ class GoogleBusinessCrawler:
                 'Upgrade-Insecure-Requests': '1'
             })
 
-            # 导航到URL并设置超时
-            await page.goto(url, wait_until='domcontentloaded', timeout=self.timeout)
+            # 改进的页面导航策略 - 依次尝试不同的等待条件
+            navigation_success = False
+            wait_conditions = ['networkidle', 'domcontentloaded', 'load']
+            
+            for wait_condition in wait_conditions:
+                try:
+                    logger.info(f"尝试导航到页面，等待条件: {wait_condition}")
+                    await page.goto(url, wait_until=wait_condition, timeout=self.timeout)
+                    current_url = page.url
+                    logger.info(f"页面导航成功，当前URL: {current_url}")
+                    navigation_success = True
+                    break
+                except Exception as e:
+                    logger.warning(f"使用 {wait_condition} 条件导航失败: {e}")
+                    if wait_condition != wait_conditions[-1]:  # 不是最后一个条件
+                        continue
+                    else:
+                        raise
+            
+            if not navigation_success:
+                raise Exception("所有导航策略都失败了")
 
             # 等待页面加载并尝试找到商家内容
             try:
@@ -230,13 +270,12 @@ class GoogleBusinessCrawler:
                     await page.wait_for_selector('h1', timeout=5000)
                     logger.info("页面内容已加载，找到页面标题")
                 except PlaywrightTimeoutError:
-                    logger.warning(f"未找到商家内容选择器，继续提取: {url}")
+                    logger.warning(f"未找到商家内容选择器，继续提取: {current_url}")
 
             # 提取商家信息
             business_info = await self._extract_business_data(page)
 
             # 添加当前URL（重定向后）到商家数据
-            current_url = page.url
             business_info['current_url'] = current_url
             business_info['original_url'] = url
 
@@ -246,13 +285,17 @@ class GoogleBusinessCrawler:
             return business_info
 
         except PlaywrightTimeoutError:
-            logger.error(f"页面加载超时: {url}")
-            raise Exception(f"页面加载超时: {url}")
+            logger.error(f"页面加载超时: {current_url}")
+            raise Exception(f"页面加载超时: {current_url}")
         except Exception as e:
-            logger.error(f"从URL {url} 提取商家信息时出错: {e}")
+            logger.error(f"从URL {current_url} 提取商家信息时出错: {e}")
             raise Exception(f"提取商家信息失败: {str(e)}")
         finally:
-            await page.close()
+            try:
+                if page and not page.is_closed():
+                    await page.close()
+            except Exception as e:
+                logger.warning(f"关闭页面时出错: {e}")
 
     async def _extract_business_data(self, page: Page) -> Dict[str, Any]:
         """从页面提取商家数据
