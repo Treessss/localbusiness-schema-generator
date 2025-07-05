@@ -20,7 +20,7 @@ import logging
 import sys
 import os
 from typing import Dict, Any, Optional
-from playwright.async_api import async_playwright, Browser, Page, PlaywrightTimeoutError
+from playwright.async_api import async_playwright, Browser, Page, TimeoutError as PlaywrightTimeoutError
 from bs4 import BeautifulSoup
 
 # 配置日志
