@@ -68,6 +68,7 @@ class LinuxOptimizedCrawler:
             '--disable-renderer-backgrounding',
             '--disable-features=TranslateUI',
             '--disable-features=VizDisplayCompositor',
+            '--disable-features=BlinkGenPropertyTrees',
             '--disable-extensions',
             '--disable-plugins',
             '--disable-default-apps',
@@ -80,13 +81,50 @@ class LinuxOptimizedCrawler:
             '--memory-pressure-off',
             '--max_old_space_size=4096',
             '--disable-web-security',
-            '--disable-features=VizDisplayCompositor',
             '--disable-blink-features=AutomationControlled',
             '--disable-ipc-flooding-protection',
             '--no-first-run',
             '--no-default-browser-check',
             '--disable-images',  # 禁用图片加载以提高速度
-            '--disable-javascript',  # 禁用JS以避免复杂交互
+            '--disable-field-trial-config',
+            '--disable-infobars',
+            '--disable-notifications',
+            '--disable-popup-blocking',
+            '--disable-client-side-phishing-detection',
+            '--disable-component-extensions-with-background-pages',
+            '--disable-hang-monitor',
+            '--disable-prompt-on-repost',
+            '--disable-background-networking',
+            '--disable-breakpad',
+            '--disable-component-update',
+            '--disable-domain-reliability',
+            '--disable-logging',
+            '--disable-speech-api',
+            '--disable-file-system',
+            '--disable-permissions-api',
+            '--disable-presentation-api',
+            '--disable-remote-fonts',
+            '--disable-shared-workers',
+            '--disable-storage-reset',
+            '--disable-tabbed-options',
+            '--disable-threaded-animation',
+            '--disable-threaded-scrolling',
+            '--disable-in-process-stack-traces',
+            '--disable-histogram-customizer',
+            '--disable-gl-extensions',
+            '--disable-composited-antialiasing',
+            '--disable-canvas-aa',
+            '--disable-3d-apis',
+            '--disable-accelerated-2d-canvas',
+            '--disable-accelerated-jpeg-decoding',
+            '--disable-accelerated-mjpeg-decode',
+            '--disable-app-list-dismiss-on-blur',
+            '--disable-accelerated-video-decode',
+            '--num-raster-threads=1',
+            '--aggressive-cache-discard',
+            '--max_semi_space_size=1',
+            '--initial_old_space_size=1',
+            '--no-pings'
         ]
         
         try:
@@ -190,6 +228,11 @@ class LinuxOptimizedCrawler:
         
         page = None
         try:
+            # 检查浏览器是否仍然活跃
+            if self.browser.is_connected() is False:
+                logger.error("浏览器连接已断开，重新启动")
+                await self.start()
+            
             page = await self.browser.new_page()
             
             # 设置较短的超时时间
@@ -205,22 +248,58 @@ class LinuxOptimizedCrawler:
             
             logger.info(f"开始导航到URL: {url}")
             
-            # 使用较短超时进行导航
+            # 使用更保守的导航策略
+            navigation_success = False
             try:
                 await page.goto(url, 
-                               wait_until='domcontentloaded', 
+                               wait_until='networkidle', 
                                timeout=self.timeout)
-                logger.info("页面导航成功")
+                navigation_success = True
+                logger.info("页面导航成功（networkidle）")
             except PlaywrightTimeoutError:
-                logger.warning("页面导航超时，尝试继续处理")
-                # 即使超时也尝试提取信息
+                logger.warning("networkidle超时，尝试domcontentloaded")
+                try:
+                    await page.goto(url, 
+                                   wait_until='domcontentloaded', 
+                                   timeout=self.timeout // 2)
+                    navigation_success = True
+                    logger.info("页面导航成功（domcontentloaded）")
+                except PlaywrightTimeoutError:
+                    logger.warning("domcontentloaded也超时，尝试load")
+                    try:
+                        await page.goto(url, 
+                                       wait_until='load', 
+                                       timeout=self.timeout // 3)
+                        navigation_success = True
+                        logger.info("页面导航成功（load）")
+                    except PlaywrightTimeoutError:
+                        logger.error("所有导航策略都失败")
+                        return {
+                            'name': None,
+                            'error': 'Navigation timeout - all strategies failed',
+                            'original_url': url,
+                            'current_url': None
+                        }
             
-            # 快速检查页面是否加载
+            if not navigation_success:
+                return {
+                    'name': None,
+                    'error': 'Navigation failed',
+                    'original_url': url,
+                    'current_url': None
+                }
+            
+            # 验证页面是否真的加载了
             try:
-                await page.wait_for_selector('body', timeout=5000)
-                logger.info("页面body元素已加载")
-            except PlaywrightTimeoutError:
-                logger.warning("页面body元素加载超时")
+                current_url = page.url
+                logger.info(f"当前页面URL: {current_url}")
+                
+                # 等待页面稳定
+                await page.wait_for_load_state('domcontentloaded', timeout=5000)
+                logger.info("页面DOM内容已加载")
+                
+            except Exception as e:
+                logger.warning(f"页面状态检查失败: {e}")
             
             # 提取基本信息
             business_info = await self._extract_basic_info(page)
@@ -234,15 +313,25 @@ class LinuxOptimizedCrawler:
             
         except Exception as e:
             logger.error(f"提取商家信息时出错: {e}")
+            current_url = None
+            try:
+                if page:
+                    current_url = page.url
+            except:
+                pass
+            
             return {
                 'name': None,
                 'error': str(e),
                 'original_url': url,
-                'current_url': page.url if page else None
+                'current_url': current_url
             }
         finally:
             if page:
-                await page.close()
+                try:
+                    await page.close()
+                except:
+                    logger.warning("页面关闭时出错，忽略")
     
     async def _extract_basic_info(self, page: Page) -> Dict[str, Any]:
         """提取基本商家信息
