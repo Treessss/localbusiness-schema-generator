@@ -20,51 +20,73 @@
 - **前端**: HTML5 + CSS3 + JavaScript
 - **部署**: Docker 支持
 
-## 快速开始
+## 🚀 快速开始
 
 ### 环境要求
-
 - Python 3.8+
-- Node.js (用于 Playwright)
+- 现代浏览器支持
+- 足够的系统内存（建议2GB+）
 
 ### 安装步骤
 
 1. **克隆项目**
-   ```bash
-   git clone <repository-url>
-   cd localbusiness
-   ```
+```bash
+git clone https://github.com/Treessss/localbusiness-schema-generator.git
+cd localbusiness-schema-generator
+```
 
 2. **安装依赖**
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+pip install -r requirements.txt
+```
 
-3. **安装 Playwright 浏览器**
-   ```bash
-   playwright install-deps
-   playwright install chromium
-   ```
+3. **安装Playwright浏览器**
+```bash
+playwright install chromium
+```
 
-4. **启动应用**
-   
-   **方式一：标准启动**
-   ```bash
-   python run.py
-   ```
-   
-   **方式二：无头模式启动（推荐服务器环境）**
-   ```bash
-   python run_headless.py
-   ```
-   
-   **方式三：完整服务启动（包含监控）**
-   ```bash
-   python start_with_monitor.py
-   ```
+4. **配置环境变量（可选）**
+```bash
+cp .env.example .env
+# 编辑 .env 文件配置Redis等选项
+```
 
-5. **访问应用**
-   打开浏览器访问: http://localhost:8000
+5. **启动应用**
+```bash
+python -m uvicorn app.main:app --reload
+```
+
+访问 http://localhost:8000 开始使用！
+
+### Linux环境特别说明
+
+如果在Linux环境下遇到程序卡住或浏览器启动问题，请参考以下解决方案：
+
+#### 快速诊断
+```bash
+# 运行诊断脚本
+python diagnose_linux.py
+```
+
+#### 使用Linux优化版爬虫
+```bash
+# 测试Linux优化版本
+python linux_crawler_fix.py
+```
+
+#### 常见问题解决
+```bash
+# 安装系统依赖
+sudo apt-get update
+sudo apt-get install -y libnss3 libatk-bridge2.0-0 libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libasound2
+
+# 安装Playwright依赖
+playwright install-deps
+playwright install chromium
+
+# 如果仍有问题，使用无头模式启动
+python run_headless.py
+```
 
 ## 使用方法
 
@@ -292,68 +314,137 @@ docker-compose up -d
 
 在 `crawler.py` 的 `_format_opening_hours` 方法中添加新的时间格式支持。
 
-## 故障排除
+## 🔧 故障排除
 
 ### 常见问题
 
-1. **Playwright 依赖缺失错误**
-   
-   **错误信息**: `Host system is missing dependencies to run browsers`
-   
-   **解决方案**:
-   
-   **方案一：自动修复（推荐）**
-   ```bash
-   python fix_playwright_deps.py
-   ```
-   
-   **方案二：手动安装**
-   ```bash
-   # 安装系统依赖
-   playwright install-deps
-   
-   # 安装浏览器
-   playwright install chromium
-   
-   # 对于Ubuntu/Debian系统
-   sudo apt-get update
-   sudo apt-get install -y libatk-bridge2.0-0 libatspi2.0-0 libgbm1
-   
-   # 对于CentOS/RHEL系统
-   sudo yum install -y atk at-spi2-atk mesa-libgbm
-   ```
-   
-   **方案三：Docker部署（强烈推荐）**
-   ```bash
-   docker-compose up -d
-   ```
+#### 1. Playwright 浏览器依赖问题
 
-2. **Playwright 安装失败**
-   ```bash
-   # 升级pip和setuptools
-   pip install --upgrade pip setuptools wheel
-   
-   # 重新安装Playwright
-   pip install --upgrade playwright
-   playwright install chromium
-   ```
+**问题**: 出现 "Host system is missing dependencies" 错误
 
-3. **页面加载超时**
-   - 检查网络连接
-   - 增加 `PAGE_LOAD_TIMEOUT` 值
-   - 确认 Google Maps 链接有效
-   - 尝试无头模式启动: `python run_headless.py`
+**解决方案**:
+```bash
+# 自动修复依赖
+python fix_playwright_deps.py
 
-4. **信息提取不完整**
-   - 检查页面结构是否发生变化
-   - 查看日志获取详细错误信息
-   - 尝试不同的 Google Maps 链接格式
+# 或手动安装
+playwright install-deps
+playwright install chromium
+```
 
-5. **服务器环境部署问题**
-   - 使用无头模式: `python run_headless.py`
-   - 检查系统架构兼容性
-   - 考虑使用Docker部署
-   - 确保有足够的系统资源
+#### 2. 浏览器启动失败
+
+**问题**: 浏览器无法启动或超时
+
+**解决方案**:
+```bash
+# 使用无头模式启动
+python run_headless.py
+
+# 或使用Docker部署
+docker-compose up
+```
+
+#### 3. Linux环境程序卡住问题
+
+**问题**: 在Linux环境下程序在页面导航阶段卡住
+
+**诊断步骤**:
+```bash
+# 1. 运行完整诊断
+python diagnose_linux.py
+
+# 2. 检查系统依赖
+sudo apt-get install -y libnss3 libatk-bridge2.0-0 libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libasound2
+
+# 3. 重新安装Playwright
+playwright install-deps
+playwright install chromium
+```
+
+**解决方案**:
+```bash
+# 使用Linux优化版爬虫
+python linux_crawler_fix.py
+
+# 或修改超时设置
+export CRAWLER_TIMEOUT=20000
+python run_headless.py
+```
+
+**常见原因**:
+- 系统依赖缺失
+- 内存不足（特别是/dev/shm）
+- 浏览器启动参数不适配Linux
+- 网络连接超时
+- 权限问题
+
+#### 4. 内存不足
+
+**问题**: 系统内存不足导致崩溃
+
+**解决方案**:
+- 增加系统内存
+- 使用 `--single-process` 参数
+- 启用Redis缓存减少重复请求
+- 增加/dev/shm大小：`sudo mount -o remount,size=512M /dev/shm`
+
+#### 5. 网络连接问题
+
+**问题**: 无法访问Google Maps
+
+**解决方案**:
+- 检查网络连接
+- 配置代理设置
+- 使用VPN（如果需要）
+
+### 高级故障排除
+
+#### 启用详细日志
+```bash
+export LOG_LEVEL=DEBUG
+python run.py
+```
+
+#### 检查系统资源
+```bash
+# 检查内存使用
+free -h
+
+# 检查磁盘空间
+df -h
+
+# 检查/dev/shm
+df -h /dev/shm
+
+# 检查进程
+ps aux | grep chrome
+```
+
+#### 清理缓存
+```bash
+# 清理Playwright缓存
+rm -rf ~/.cache/ms-playwright
+
+# 重新安装浏览器
+playwright install chromium
+```
+
+#### Linux环境特定检查
+```bash
+# 检查系统信息
+uname -a
+cat /etc/os-release
+
+# 检查容器环境
+ls -la /.dockerenv
+
+# 检查显示服务器
+echo $DISPLAY
+
+# 测试浏览器启动
+chromium --version 2>/dev/null || google-chrome --version 2>/dev/null || echo "未找到系统浏览器"
+```
 
 ### 日志调试
 
