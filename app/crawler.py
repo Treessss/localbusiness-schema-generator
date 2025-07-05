@@ -402,6 +402,7 @@ class GoogleBusinessCrawler:
         logger.info(f"开始提取商家信息，URL: {url}")
 
         page = await self.browser.new_page()
+
         current_url = url
 
         try:
@@ -416,29 +417,43 @@ class GoogleBusinessCrawler:
                 'Upgrade-Insecure-Requests': '1'
             })
 
-            # 改进的页面导航策略 - 依次尝试不同的等待条件
+            # 使用更保守的导航策略（Linux优化版）
             navigation_success = False
-            wait_conditions = ['networkidle', 'domcontentloaded', 'load']
-            
-            for wait_condition in wait_conditions:
+            try:
+                logger.info(f"尝试导航到页面，等待条件: networkidle")
+                await page.goto(url, 
+                               wait_until='networkidle', 
+                               timeout=self.timeout)
+                navigation_success = True
+                logger.info("页面导航成功（networkidle）")
+            except PlaywrightTimeoutError:
+                logger.warning("networkidle超时，尝试domcontentloaded")
                 try:
-                    logger.info(f"尝试导航到页面，等待条件: {wait_condition}")
-                    await page.goto(url, wait_until=wait_condition, timeout=self.timeout)
-                    current_url = page.url
-                    logger.info(f"页面导航成功，当前URL: {current_url}")
+                    await page.goto(url, 
+                                   wait_until='domcontentloaded', 
+                                   timeout=self.timeout // 2)
                     navigation_success = True
-                    break
-                except Exception as e:
-                    logger.warning(f"使用 {wait_condition} 条件导航失败: {e}")
-                    if wait_condition != wait_conditions[-1]:  # 不是最后一个条件
-                        continue
-                    else:
-                        raise
+                    logger.info("页面导航成功（domcontentloaded）")
+                except PlaywrightTimeoutError:
+                    logger.warning("domcontentloaded也超时，尝试load")
+                    try:
+                        await page.goto(url, 
+                                       wait_until='load', 
+                                       timeout=self.timeout // 3)
+                        navigation_success = True
+                        logger.info("页面导航成功（load）")
+                    except PlaywrightTimeoutError:
+                        logger.error("所有导航策略都失败")
+                        raise Exception("Navigation timeout - all strategies failed")
             
             if not navigation_success:
-                raise Exception("所有导航策略都失败了")
+                raise Exception("Navigation failed")
+            
+            # 验证页面是否真的加载了
+            current_url = page.url
+            logger.info(f"当前页面URL: {current_url}")
 
-            # 等待页面加载并尝试找到商家内容
+            # 等待页面稳定并验证加载状态
             try:
                 # 检查页面和浏览器连接状态
                 if page.is_closed():
@@ -446,29 +461,20 @@ class GoogleBusinessCrawler:
                 if not self.browser.is_connected():
                     raise Exception("浏览器连接已断开")
                 
-                # 首先等待页面基本加载完成
+                logger.info(page.url)
+                
+                # 等待页面稳定
                 await page.wait_for_load_state('domcontentloaded', timeout=5000)
                 logger.info("页面DOM内容已加载")
-                logger.info("页面内容已加载，找到商家主要内容区域")
+                
             except PlaywrightTimeoutError:
-                try:
-                    # 再次检查连接状态
-                    if page.is_closed():
-                        raise Exception("页面已关闭")
-                    if not self.browser.is_connected():
-                        raise Exception("浏览器连接已断开")
-                    
-                    # 备用检查：等待主要内容区域
-                    await page.wait_for_selector('h1', timeout=5000)
-                    logger.info("页面内容已加载，找到页面标题")
-                except PlaywrightTimeoutError:
-                    logger.warning(f"未找到商家内容选择器，继续提取: {current_url}")
+                logger.warning(f"页面状态检查超时，但继续提取: {current_url}")
             except Exception as e:
                 if "closed" in str(e).lower():
                     logger.error(f"页面或浏览器连接已关闭: {e}")
                     raise Exception(f"页面或浏览器连接已关闭: {e}")
                 else:
-                    raise
+                    logger.warning(f"页面状态检查失败: {e}")
 
             # 提取商家信息
             business_info = await self._extract_business_data(page)
