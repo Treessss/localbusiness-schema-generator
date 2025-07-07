@@ -222,6 +222,17 @@ async def extract_business_info(request: ExtractRequest):
             }
 
     try:
+        # 检查全局爬虫实例的浏览器状态
+        if not crawler.browser or not crawler.browser.is_connected():
+            logger.warning("全局浏览器实例已断开，尝试重新启动...")
+            try:
+                await crawler.stop()
+                await crawler.start()
+                logger.info("全局浏览器实例重启成功")
+            except Exception as restart_error:
+                logger.error(f"重启全局浏览器实例失败: {restart_error}")
+                raise Exception(f"浏览器重启失败: {restart_error}")
+        
         # 使用全局爬虫实例提取商家信息
         business_data = await crawler.extract_business_info(url)
 

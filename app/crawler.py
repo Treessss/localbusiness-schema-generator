@@ -118,105 +118,72 @@ class GoogleBusinessCrawler:
             logger.info("使用Linux优化配置")
             browser_args = [
                 '--no-sandbox',
+                '--disable-setuid-sandbox',
                 '--disable-dev-shm-usage',
-                '--disable-blink-features=AutomationControlled',
-                '--disable-features=VizDisplayCompositor',
-                '--disable-web-security',
-                '--disable-features=TranslateUI',
-                '--disable-ipc-flooding-protection',
-                '--no-first-run',
-                '--no-default-browser-check',
+                '--disable-gpu',
+                '--disable-software-rasterizer',
                 '--disable-background-timer-throttling',
                 '--disable-backgrounding-occluded-windows',
                 '--disable-renderer-backgrounding',
-                '--disable-gpu',
-                '--disable-software-rasterizer',
+                '--disable-features=TranslateUI',
+                '--disable-features=VizDisplayCompositor',
+                '--disable-features=BlinkGenPropertyTrees',
                 '--disable-extensions',
                 '--disable-plugins',
-                '--disable-images',
                 '--disable-default-apps',
                 '--disable-sync',
                 '--disable-translate',
                 '--hide-scrollbars',
                 '--mute-audio',
                 '--no-zygote',
-                '--single-process',
+                # '--single-process',
+                '--memory-pressure-off',
+                '--max_old_space_size=4096',
+                '--disable-web-security',
+                '--disable-blink-features=AutomationControlled',
+                '--disable-ipc-flooding-protection',
+                '--no-first-run',
+                '--no-default-browser-check',
+                '--disable-images',  # 禁用图片加载以提高速度
+                '--disable-field-trial-config',
+                '--disable-infobars',
+                '--disable-notifications',
+                '--disable-popup-blocking',
                 '--disable-client-side-phishing-detection',
-                '--disable-logging',
-                '--disable-crash-reporter',
-                '--disable-component-update',
-                '--disable-background-networking',
-                '--disable-domain-reliability',
-                '--disable-features=MediaRouter',
+                '--disable-component-extensions-with-background-pages',
                 '--disable-hang-monitor',
                 '--disable-prompt-on-repost',
-                '--disable-background-downloads',
-                '--disable-add-to-shelf',
-                '--disable-office-editing-component-app',
-                '--disable-component-extensions-with-background-pages',
-                '--disable-features=BlinkGenPropertyTrees',
+                '--disable-background-networking',
+                '--disable-breakpad',
+                '--disable-component-update',
+                '--disable-domain-reliability',
+                '--disable-logging',
+                '--disable-speech-api',
+                '--disable-file-system',
+                '--disable-permissions-api',
+                '--disable-presentation-api',
+                '--disable-remote-fonts',
+                '--disable-shared-workers',
+                '--disable-storage-reset',
+                '--disable-tabbed-options',
+                '--disable-threaded-animation',
+                '--disable-threaded-scrolling',
+                '--disable-in-process-stack-traces',
+                '--disable-histogram-customizer',
+                '--disable-gl-extensions',
+                '--disable-composited-antialiasing',
+                '--disable-canvas-aa',
+                '--disable-3d-apis',
                 '--disable-accelerated-2d-canvas',
                 '--disable-accelerated-jpeg-decoding',
                 '--disable-accelerated-mjpeg-decode',
-                '--disable-accelerated-video-decode',
-                '--disable-accelerated-video-encode',
                 '--disable-app-list-dismiss-on-blur',
-                '--disable-background-mode',
-                '--disable-breakpad',
-                '--disable-checker-imaging',
-                '--disable-component-cloud-policy',
-                '--disable-composited-antialiasing',
-                '--disable-default-apps',
-                '--disable-demo-mode',
-                '--disable-device-discovery-notifications',
-                '--disable-domain-blocking-for-3d-apis',
-                '--disable-features=AudioServiceOutOfProcess',
-                '--disable-features=VizDisplayCompositor',
-                '--disable-field-trial-config',
-                '--disable-file-system',
-                '--disable-fine-grained-time-zone-detection',
-                '--disable-geolocation',
-                '--disable-gl-extensions',
-                '--disable-histogram-customizer',
-                '--disable-in-process-stack-traces',
-                '--disable-infobars',
-                '--disable-ipc-flooding-protection',
-                '--disable-local-storage',
-                '--disable-logging',
-                '--disable-login-animations',
-                '--disable-new-profile-management',
-                '--disable-notifications',
-                '--disable-password-generation',
-                '--disable-permissions-api',
-                '--disable-plugins-discovery',
-                '--disable-popup-blocking',
-                '--disable-print-preview',
-                '--disable-renderer-accessibility',
-                '--disable-session-storage',
-                '--disable-shared-workers',
-                '--disable-speech-api',
-                '--disable-sync',
-                '--disable-tab-for-desktop-share',
-                '--disable-threaded-animation',
-                '--disable-threaded-scrolling',
-                '--disable-translate',
-                '--disable-voice-input',
-                '--disable-wake-on-wifi',
-                '--disable-web-security',
-                '--force-color-profile=srgb',
-                '--force-device-scale-factor=1',
-                '--hide-scrollbars',
-                '--ignore-certificate-errors',
-                '--ignore-certificate-errors-spki-list',
-                '--ignore-ssl-errors',
-                '--mute-audio',
-                '--no-default-browser-check',
-                '--no-first-run',
-                '--no-pings',
-                '--no-sandbox',
-                '--no-zygote',
-                '--single-process',
-                '--use-mock-keychain'
+                '--disable-accelerated-video-decode',
+                '--num-raster-threads=1',
+                '--aggressive-cache-discard',
+                '--max_semi_space_size=1',
+                '--initial_old_space_size=1',
+                '--no-pings'
             ]
         else:
             # 其他操作系统（Windows, macOS等）的通用配置
@@ -391,21 +358,41 @@ class GoogleBusinessCrawler:
         if not self._is_started or not self.browser:
             raise RuntimeError("浏览器实例未启动，请先调用 start() 方法")
 
-        # 检查浏览器连接状态
-        if not self.browser.is_connected():
-            logger.warning("浏览器连接已断开，尝试重新启动...")
-            await self.stop()
-            await self.start()
-            if not self.browser or not self.browser.is_connected():
-                raise RuntimeError("无法重新建立浏览器连接")
+        # 改进的浏览器连接状态检查
+        max_retries = 2
+        for retry in range(max_retries):
+            try:
+                # 检查浏览器连接状态，但不要过于频繁地重启
+                if not self.browser.is_connected():
+                    logger.warning(f"浏览器连接已断开（重试 {retry + 1}/{max_retries}），尝试重新启动...")
+                    await self.stop()
+                    await self.start()
+                    if not self.browser or not self.browser.is_connected():
+                        if retry == max_retries - 1:
+                            raise RuntimeError("无法重新建立浏览器连接")
+                        continue
+                break
+            except Exception as e:
+                logger.error(f"浏览器连接检查失败（重试 {retry + 1}/{max_retries}）: {e}")
+                if retry == max_retries - 1:
+                    raise RuntimeError(f"浏览器连接检查失败: {e}")
+                await asyncio.sleep(1)  # 短暂等待后重试
 
         logger.info(f"开始提取商家信息，URL: {url}")
 
-        page = await self.browser.new_page()
-
+        page = None
         current_url = url
 
         try:
+            # 创建新页面
+            try:
+                page = await self.browser.new_page()
+                logger.debug(f"页面创建成功: closed={page.is_closed()}")
+            except Exception as page_error:
+                logger.error(f"创建页面失败: {page_error}")
+                # 如果页面创建失败，可能是浏览器问题，抛出异常让上层重试
+                raise Exception(f"页面创建失败: {page_error}")
+            
             # 设置视口和用户代理以避免检测
             await page.set_viewport_size({"width": 1920, "height": 1080})
             await page.set_extra_http_headers({
@@ -417,64 +404,23 @@ class GoogleBusinessCrawler:
                 'Upgrade-Insecure-Requests': '1'
             })
 
-            # 使用更保守的导航策略（Linux优化版）
-            navigation_success = False
-            try:
-                logger.info(f"尝试导航到页面，等待条件: networkidle")
-                await page.goto(url, 
-                               wait_until='networkidle', 
-                               timeout=self.timeout)
-                navigation_success = True
-                logger.info("页面导航成功（networkidle）")
-            except PlaywrightTimeoutError:
-                logger.warning("networkidle超时，尝试domcontentloaded")
-                try:
-                    await page.goto(url, 
-                                   wait_until='domcontentloaded', 
-                                   timeout=self.timeout // 2)
-                    navigation_success = True
-                    logger.info("页面导航成功（domcontentloaded）")
-                except PlaywrightTimeoutError:
-                    logger.warning("domcontentloaded也超时，尝试load")
-                    try:
-                        await page.goto(url, 
-                                       wait_until='load', 
-                                       timeout=self.timeout // 3)
-                        navigation_success = True
-                        logger.info("页面导航成功（load）")
-                    except PlaywrightTimeoutError:
-                        logger.error("所有导航策略都失败")
-                        raise Exception("Navigation timeout - all strategies failed")
-            
-            if not navigation_success:
-                raise Exception("Navigation failed")
-            
-            # 验证页面是否真的加载了
+            # 导航到URL并设置超时
+            await page.goto(url, wait_until='domcontentloaded', timeout=self.timeout)
             current_url = page.url
-            logger.info(f"当前页面URL: {current_url}")
+            logger.info(f"页面导航成功，当前URL: {current_url}")
 
-            # 等待页面稳定并验证加载状态
+            # 等待页面加载并尝试找到商家内容
             try:
-                # 检查页面和浏览器连接状态
-                if page.is_closed():
-                    raise Exception("页面已关闭")
-                if not self.browser.is_connected():
-                    raise Exception("浏览器连接已断开")
-                
-                logger.info(page.url)
-                
-                # 等待页面稳定
-                await page.wait_for_load_state('domcontentloaded', timeout=5000)
-                logger.info("页面DOM内容已加载")
-                
+                # 首先等待页面基本加载完成
+                await page.wait_for_selector('[role="main"]', timeout=5000)
+                logger.info("页面内容已加载，找到商家主要内容区域")
             except PlaywrightTimeoutError:
-                logger.warning(f"页面状态检查超时，但继续提取: {current_url}")
-            except Exception as e:
-                if "closed" in str(e).lower():
-                    logger.error(f"页面或浏览器连接已关闭: {e}")
-                    raise Exception(f"页面或浏览器连接已关闭: {e}")
-                else:
-                    logger.warning(f"页面状态检查失败: {e}")
+                try:
+                    # 备用检查：等待主要内容区域
+                    await page.wait_for_selector('h1', timeout=5000)
+                    logger.info("页面内容已加载，找到页面标题")
+                except PlaywrightTimeoutError:
+                    logger.warning(f"未找到商家内容选择器，继续提取: {url}")
 
             # 提取商家信息
             business_info = await self._extract_business_data(page)
@@ -495,11 +441,17 @@ class GoogleBusinessCrawler:
             logger.error(f"从URL {current_url} 提取商家信息时出错: {e}")
             raise Exception(f"提取商家信息失败: {str(e)}")
         finally:
-            try:
-                if page and not page.is_closed():
-                    await page.close()
-            except Exception as e:
-                logger.warning(f"关闭页面时出错: {e}")
+            # 改进的页面关闭逻辑
+            if page:
+                try:
+                    if not page.is_closed():
+                        await page.close()
+                        logger.debug("页面已成功关闭")
+                    else:
+                        logger.debug("页面已经关闭，无需再次关闭")
+                except Exception as e:
+                    logger.warning(f"关闭页面时出错: {e}")
+                    # 即使关闭失败也不抛出异常，避免影响主要逻辑
 
     async def _extract_business_data(self, page: Page) -> Dict[str, Any]:
         """从页面提取商家数据
@@ -517,11 +469,9 @@ class GoogleBusinessCrawler:
         business_info = {}
 
         try:
-            # 检查页面和浏览器连接状态
+            # 简化的页面状态检查，避免过于频繁的连接检查
             if page.is_closed():
                 raise Exception("页面已关闭，无法提取数据")
-            if not self.browser.is_connected():
-                raise Exception("浏览器连接已断开，无法提取数据")
             # 提取商家名称
             logger.info("开始提取商家名称")
             business_info['name'] = await self._extract_business_name(page)
@@ -600,11 +550,9 @@ class GoogleBusinessCrawler:
             BeautifulSoup解析对象
         """
         try:
-            # 检查页面和浏览器连接状态
+            # 只检查页面状态，不检查浏览器连接
             if page.is_closed():
                 raise Exception("页面已关闭，无法获取页面内容")
-            if not self.browser.is_connected():
-                raise Exception("浏览器连接已断开，无法获取页面内容")
             
             html_content = await page.content()
             soup = BeautifulSoup(html_content, 'lxml')
