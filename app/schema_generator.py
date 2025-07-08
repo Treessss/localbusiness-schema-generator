@@ -253,6 +253,7 @@ class SchemaGenerator:
         """
         # 首先尝试从当前页面URL提取
         current_url = business_data.get('current_url', '')
+        logger.info(f"获取到页面url为:{current_url}")
         if current_url:
             coords = self._extract_coords_from_url(current_url)
             if coords:
