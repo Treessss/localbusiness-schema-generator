@@ -531,6 +531,8 @@ class GoogleBusinessCrawler:
             logger.info(
                 f"图片提取完成，共{len(business_info['images']) if business_info['images'] else 0}张")
 
+            logger.info("获取url")
+            business_info["current_url"] = page.url
             logger.info("商家数据提取全部完成")
 
         except Exception as e:
