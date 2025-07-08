@@ -48,7 +48,7 @@ class RedisCache:
         self._cleanup_task = None
         
         # 从环境变量获取连接池配置
-        self.max_connections = int(os.getenv('REDIS_MAX_CONNECTIONS', '20'))
+        self.max_connections = int(os.getenv('REDIS_MAX_CONNECTIONS', '200'))
         self.socket_connect_timeout = int(os.getenv('REDIS_SOCKET_CONNECT_TIMEOUT', '5'))
         self.socket_timeout = int(os.getenv('REDIS_SOCKET_TIMEOUT', '5'))
         self.retry_on_timeout = os.getenv('REDIS_RETRY_ON_TIMEOUT', 'true').lower() == 'true'
