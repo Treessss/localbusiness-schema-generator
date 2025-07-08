@@ -202,7 +202,7 @@ async def extract_business_info(request: ExtractRequest):
 
     # 检查缓存（除非请求强制刷新或有自定义描述）
     cached_schema = None
-    if not request.force_refresh and not request.description:
+    if not request.force_refresh:
         cached_schema = await cache.get(url)
         if cached_schema:
             logger.info(f"返回缓存结果: {url}")
@@ -210,6 +210,11 @@ async def extract_business_info(request: ExtractRequest):
             schema_dict = cached_schema.model_dump(by_alias=True, exclude_none=True)
             schema_dict["@context"] = "https://schema.org"
             schema_dict["@type"] = "LocalBusiness"
+            
+            # 如果有自定义描述，直接覆盖缓存中的描述
+            if request.description:
+                schema_dict["description"] = request.description
+            
             import json
             json_content = json.dumps(schema_dict, indent=2, ensure_ascii=False)
             script_content = f'<script type="application/ld+json">\n{json_content}\n</script>'
