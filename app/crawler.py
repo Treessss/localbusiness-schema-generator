@@ -533,6 +533,7 @@ class GoogleBusinessCrawler:
 
             logger.info("获取url")
             business_info["current_url"] = page.url
+            logger.info(f"获取url成功:{page.url}")
             logger.info("商家数据提取全部完成")
 
         except Exception as e:
