@@ -426,7 +426,6 @@ class GoogleBusinessCrawler:
             business_info = await self._extract_business_data(page)
 
             # 添加当前URL（重定向后）到商家数据
-            business_info['current_url'] = current_url
             business_info['original_url'] = url
 
             logger.info(
