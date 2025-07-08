@@ -1357,37 +1357,57 @@ class GoogleBusinessCrawler:
             logger.info("正在查找价格范围")
             price_range = await page.evaluate("""
                 () => {
-                    // 查找价格相关的元素
-                    const elements = document.querySelectorAll('*');
-                    for (const element of elements) {
-                        const text = element.textContent;
-                        if (text) {
-                            // 优先匹配价格等级符号（$$, $$$, $$$$）
-                            const priceLevelMatch = text.match(/\$\$+/);
-                            if (priceLevelMatch && priceLevelMatch[0].length >= 2 && priceLevelMatch[0].length <= 4) {
-                                return priceLevelMatch[0];
-                            }
-                            
-                            // 匹配具体价格范围，支持各种货币符号和分隔符
-                            const priceRangeMatch = text.match(/([A-Z]*\$|¥|€|£)\s*(\d+)[–-](\d+)/);
-                            if (priceRangeMatch) {
-                                // 标准化格式：移除货币前缀，只保留基本货币符号
-                                const currency = priceRangeMatch[1];
-                                const minPrice = priceRangeMatch[2];
-                                const maxPrice = priceRangeMatch[3];
-                                return `${currency}${minPrice}-${maxPrice}`;
-                            }
-                            
-                            // 匹配单个价格（如 $25, A$30）并标准化
-                            const singlePriceMatch = text.match(/([A-Z]*\$|¥|€|£)\s*(\d+)/);
-                            if (singlePriceMatch && text.trim().length < 20) {
-                                // 标准化格式：移除货币前缀
-                                const currency = singlePriceMatch[1].replace(/^[A-Z]+/, '').replace(/\$/, '$');
-                                const price = singlePriceMatch[2];
-                                return `${currency}${price}`;
+                    // 优先查找包含价格信息的特定div元素
+                    const priceContainers = [
+                        // 新版Google Maps价格容器
+                        'div.fontBodyMedium.dmRWX',
+                    ];
+                    
+                    // 遍历价格容器选择器
+                    for (const selector of priceContainers) {
+                        const containers = document.querySelectorAll(selector);
+                        for (const container of containers) {
+                            const text = container.textContent || container.innerText;
+                            if (text) {
+                                // 优先匹配价格等级符号（$$, $$$, $$$$）
+                                const priceLevelMatch = text.match(/\$\$+/);
+                                if (priceLevelMatch && priceLevelMatch[0].length >= 2 && priceLevelMatch[0].length <= 4) {
+                                    return priceLevelMatch[0];
+                                }
+                                
+                                // 匹配具体价格范围，支持各种货币符号和分隔符
+                                const priceRangeMatch = text.match(/([A-Z]*\$|¥|€|£)\s*(\d+)[–-](\d+)/);
+                                if (priceRangeMatch) {
+                                    const currency = priceRangeMatch[1];
+                                    const minPrice = priceRangeMatch[2];
+                                    const maxPrice = priceRangeMatch[3];
+                                    return `${currency}${minPrice}-${maxPrice}`;
+                                }
+                                
+                                // 匹配单个价格（如 $25, A$30）
+                                const singlePriceMatch = text.match(/([A-Z]*\$|¥|€|£)\s*(\d+)/);
+                                if (singlePriceMatch && text.trim().length < 20) {
+                                    const currency = singlePriceMatch[1].replace(/^[A-Z]+/, '').replace(/\$/, '$');
+                                    const price = singlePriceMatch[2];
+                                    return `${currency}${price}`;
+                                }
                             }
                         }
                     }
+                    
+                    // 如果特定容器没找到，回退到全局搜索（但更精确）
+                    const allElements = document.querySelectorAll('span, div');
+                    for (const element of allElements) {
+                        const text = element.textContent;
+                        if (text && text.trim().length < 50) { // 限制文本长度，避免匹配到长文本
+                            // 只匹配价格等级符号
+                            const priceLevelMatch = text.match(/^\s*\$\$+\s*$/);
+                            if (priceLevelMatch && priceLevelMatch[0].trim().length >= 2 && priceLevelMatch[0].trim().length <= 4) {
+                                return priceLevelMatch[0].trim();
+                            }
+                        }
+                    }
+                    
                     return null;
                 }
             """)
@@ -1398,24 +1418,6 @@ class GoogleBusinessCrawler:
                 logger.warning("未找到价格范围")
         except Exception as e:
             logger.error(f"提取价格范围时出错: {e}")
-
-        # 备用选择器
-        selectors = [
-            '[data-attrid*="price"]',
-            '.YrbPuc',
-            'span[aria-label*="Price"]'
-        ]
-
-        for selector in selectors:
-            try:
-                element = await page.query_selector(selector)
-                if element:
-                    text = await element.inner_text()
-                    price_range = parse_price_range(text)
-                    if price_range:
-                        return price_range
-            except Exception:
-                continue
 
         return None
 
@@ -1528,13 +1530,8 @@ class GoogleBusinessCrawler:
                 () => {
                     // 通用商家类型提取逻辑
                     
-                    // 1. 查找带有category相关属性的按钮
                     const categorySelectors = [
                         'button[jsaction*="category"]',     // Google Maps 商家类型按钮
-                        'button.DkEaL',                     // Google Maps特定的类型按钮类
-                        'span[jsaction*="category"] button', // 嵌套在span中的类型按钮
-                        '[data-value*="category"]',         // 包含category的data-value
-                        'button[aria-label*="category"]'    // 包含category的aria-label
                     ];
                     
                     for (const selector of categorySelectors) {
@@ -1547,30 +1544,7 @@ class GoogleBusinessCrawler:
                             }
                         }
                     }
-                    
-                    // 2. 查找包含在fontBodyMedium类中的按钮
-                    const mediumTextButtons = document.querySelectorAll('.fontBodyMedium button');
-                    for (const button of mediumTextButtons) {
-                        const text = button.textContent?.trim();
-                        if (text && text.length > 0 && text.length < 50) {
-                            return text;
-                        }
-                    }
-                    
-                    // 3. 查找所有可能的商家类型按钮（备选方案）
-                    const allButtons = document.querySelectorAll('button');
-                    for (const button of allButtons) {
-                        const text = button.textContent?.trim();
-                        const jsaction = button.getAttribute('jsaction');
-                        
-                        // 检查是否包含类型相关的jsaction或文本特征
-                        if (text && text.length > 2 && text.length < 30 && 
-                            (jsaction?.includes('category') || 
-                             text.match(/^[A-Za-z\s&-]+$/) || // 英文类型
-                             text.match(/^[\u4e00-\u9fa5\s]+$/))) { // 中文类型
-                            return text;
-                        }
-                    }
+
                     
                     return null;
                 }
@@ -1582,23 +1556,6 @@ class GoogleBusinessCrawler:
                 logger.warning("未找到业务类型")
         except Exception as e:
             logger.error(f"提取业务类型时出错: {e}")
-
-        # 备用选择器
-        selectors = [
-            '[data-attrid="kc:/location:category"]',
-            '.YhemCb',
-            'span[data-attrid="kc:/location:category"]'
-        ]
-
-        for selector in selectors:
-            try:
-                element = await page.query_selector(selector)
-                if element:
-                    text = await element.inner_text()
-                    if text and text.strip():
-                        return clean_text(text)
-            except Exception:
-                continue
 
         return None
 
