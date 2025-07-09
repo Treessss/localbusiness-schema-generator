@@ -123,9 +123,7 @@ def clean_text(text: str) -> str:
         str: 清理后的文本字符串
         
     Examples:
-        >>> clean_text('  Hello\n\nWorld  ')
         'Hello World'
-        >>> clean_text('★★★ Restaurant')
         'Restaurant'
     """
     if not text:

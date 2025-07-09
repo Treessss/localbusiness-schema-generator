@@ -207,8 +207,7 @@ def main():
         if not args.monitor_only:
             print(f"📡 API服务器: http://localhost:{args.api_port}")
             print(f"📚 API文档: http://localhost:{args.api_port}/docs")
-            print(f"📊 内置统计: http://localhost:{args.api_port}/stats")
-        
+
         if not args.no_monitor:
             print(f"🔍 监控中心: http://localhost:{args.monitor_port}")
         

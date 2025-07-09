@@ -25,7 +25,6 @@ if __name__ == "__main__":
     print("启动Google商家Schema生成器...")
     print(f"服务器将在以下地址可用: http://localhost:{args.port}")
     print(f"API文档: http://localhost:{args.port}/docs")
-    print(f"统计监控: http://localhost:{args.port}/stats")
     print("按Ctrl+C停止服务器")
     
     uvicorn.run(
@@ -35,4 +34,6 @@ if __name__ == "__main__":
         reload=True,
         log_level="info",
         access_log=True
+
+
     )

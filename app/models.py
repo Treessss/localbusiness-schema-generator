@@ -8,8 +8,8 @@
 所有模型都基于Pydantic，提供数据验证和序列化功能。
 """
 
-from pydantic import BaseModel, HttpUrl, Field, validator
-from typing import Optional, List, Dict, Any, Union
+from pydantic import BaseModel, Field, validator
+from typing import Optional, List, Union
 from datetime import datetime
 
 
@@ -26,8 +26,9 @@ class ExtractRequest(BaseModel):
     """
     url: str = Field(..., description="Google Business分享链接")
     force_refresh: bool = Field(False, description="是否强制刷新缓存")
-    description: Optional[str] = Field(None, max_length=500, description="自定义商家描述，最多500个字符")
-    
+    description: Optional[str] = Field(None, max_length=500,
+                                       description="自定义商家描述，最多500个字符")
+
     @validator('description')
     def validate_description(cls, v):
         if v is not None and len(v) > 500:
