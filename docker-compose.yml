@@ -1,16 +1,18 @@
-version: '3.8'
-
 services:
   web:
     build: .
     ports:
-      - "8000:8000"
+      - "8000:8000"  # API服务器
+      - "8001:8001"  # 监控服务器
     environment:
       - PYTHONPATH=/app
       - LOG_LEVEL=INFO
+      - REDIS_URL=redis://redis:6379
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped
+    depends_on:
+      - redis
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/api/health')"]
       interval: 30s
@@ -24,15 +26,20 @@ services:
         reservations:
           memory: 512M
 
-  # Optional: Add Redis for distributed caching
-  # redis:
-  #   image: redis:7-alpine
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - redis_data:/data
-  #   restart: unless-stopped
-  #   command: redis-server --appendonly yes
+  # Redis for distributed caching and concurrency limiting
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-# volumes:
-#   redis_data:
+volumes:
+  redis_data:
