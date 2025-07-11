@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict, List
 from datetime import datetime
 
+import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse
@@ -37,17 +38,22 @@ logger.add(
     level="INFO"
 )
 
-# 文件日志
-log_dir = project_root / "logs"
-log_dir.mkdir(exist_ok=True)
-logger.add(
-    log_dir / "monitor.log",
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | MONITOR - {message}",
-    level="INFO",
-    rotation="10 MB",
-    retention="30 days",
-    compression="zip"
-)
+# 文件日志 - 处理权限问题
+try:
+    log_dir = project_root / "logs"
+    log_dir.mkdir(exist_ok=True)
+    logger.add(
+        log_dir / "monitor.log",
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | MONITOR - {message}",
+        level="INFO",
+        rotation="10 MB",
+        retention="30 days",
+        compression="zip"
+    )
+    print(f"[MONITOR] 日志文件已配置: {log_dir / 'monitor.log'}")
+except (PermissionError, OSError) as e:
+    print(f"[MONITOR] 警告: 无法创建日志文件 ({e})，将只使用控制台日志")
+    # 继续运行，只使用控制台日志
 
 
 class MonitorServer:
@@ -83,14 +89,19 @@ class MonitorServer:
             allow_headers=["*"],
         )
         
-        # 挂载静态文件
+        # 挂载静态文件 - 处理权限问题
         static_dir = Path("static")
         print(f"[MONITOR] 检查静态文件目录: {static_dir.absolute()}")
-        if static_dir.exists():
-            print(f"[MONITOR] 静态文件目录存在，挂载到/static")
-            self.app.mount("/static", StaticFiles(directory="static"), name="static")
-        else:
-            print(f"[MONITOR] 警告: 静态文件目录不存在: {static_dir.absolute()}")
+        try:
+            if static_dir.exists() and static_dir.is_dir():
+                # 测试目录访问权限
+                list(static_dir.iterdir())
+                print(f"[MONITOR] 静态文件目录存在且可访问，挂载到/static")
+                self.app.mount("/static", StaticFiles(directory="static"), name="static")
+            else:
+                print(f"[MONITOR] 警告: 静态文件目录不存在: {static_dir.absolute()}")
+        except (PermissionError, OSError) as e:
+            print(f"[MONITOR] 警告: 无法访问静态文件目录 ({e})，静态文件服务将不可用")
     
     def setup_routes(self):
         """设置路由"""
@@ -101,11 +112,18 @@ class MonitorServer:
             """监控主页"""
             monitor_html_path = Path('static/monitor.html')
             print(f"[MONITOR] 请求根路径，返回: {monitor_html_path.absolute()}")
-            if monitor_html_path.exists():
-                return FileResponse('static/monitor.html')
-            else:
-                print(f"[MONITOR] 错误: monitor.html文件不存在: {monitor_html_path.absolute()}")
-                return {"error": "监控页面文件不存在"}
+            try:
+                if monitor_html_path.exists() and monitor_html_path.is_file():
+                    # 测试文件访问权限
+                    with open(monitor_html_path, 'r') as f:
+                        pass  # 只是测试能否打开
+                    return FileResponse('static/monitor.html')
+                else:
+                    print(f"[MONITOR] 错误: monitor.html文件不存在: {monitor_html_path.absolute()}")
+                    return self._get_fallback_response()
+            except (PermissionError, OSError) as e:
+                print(f"[MONITOR] 错误: 无法访问monitor.html文件 ({e})")
+                return self._get_fallback_response()
         
         @self.app.get("/api/stats")
         async def get_stats(force_refresh: bool = False):
@@ -229,6 +247,56 @@ class MonitorServer:
         """移除WebSocket连接"""
         if websocket in self.websocket_connections:
             self.websocket_connections.remove(websocket)
+    
+    def _get_fallback_response(self):
+        """当静态文件不可用时的备用响应"""
+        from fastapi.responses import HTMLResponse
+        
+        fallback_html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>API监控服务器</title>
+            <meta charset="utf-8">
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }
+                .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                .status { padding: 15px; margin: 20px 0; border-radius: 5px; }
+                .error { background: #fee; border: 1px solid #fcc; color: #c66; }
+                .info { background: #eef; border: 1px solid #ccf; color: #66c; }
+                .api-link { display: inline-block; margin: 10px 0; padding: 10px 15px; background: #007bff; color: white; text-decoration: none; border-radius: 5px; }
+                .api-link:hover { background: #0056b3; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🔍 API监控服务器</h1>
+                <div class="status error">
+                    <strong>⚠️ 监控界面不可用</strong><br>
+                    静态文件无法访问，可能是权限问题或文件缺失。
+                </div>
+                <div class="status info">
+                    <strong>✅ API监控功能正常</strong><br>
+                    您仍然可以通过API端点获取监控数据。
+                </div>
+                <h3>可用的API端点:</h3>
+                <ul>
+                    <li><a href="/api/stats" class="api-link">📊 获取API统计数据</a></li>
+                    <li><strong>WebSocket:</strong> <code>/ws/monitor</code> (实时数据推送)</li>
+                </ul>
+                <h3>解决方案:</h3>
+                <ol>
+                    <li>检查 <code>static/</code> 目录是否存在</li>
+                    <li>确保 <code>static/monitor.html</code> 文件存在</li>
+                    <li>检查文件和目录的读取权限</li>
+                    <li>如果在Docker中运行，确保容器有正确的文件权限</li>
+                </ol>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return HTMLResponse(content=fallback_html, status_code=200)
     
     async def start_background_tasks(self):
         """启动后台任务"""
