@@ -80,22 +80,22 @@
 3. **查看日志**
    ```bash
    # 查看所有服务日志
-   docker-compose logs -f
+   docker compose logs -f
    
    # 查看特定服务日志
-   docker-compose logs -f web
-   docker-compose logs -f redis
+   docker compose logs -f web
+   docker compose logs -f redis
    ```
 
 4. **停止服务**
    ```bash
-   docker-compose down
+   docker compose down
    ```
 
 5. **重新构建**
    ```bash
-   docker-compose build --no-cache
-   docker-compose up -d
+   docker compose build --no-cache
+   docker compose up -d
    ```
 
 #### 服务配置
