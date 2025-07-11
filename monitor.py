@@ -74,6 +74,7 @@ class MonitorServer:
     
     def setup_middleware(self):
         """设置中间件"""
+        print("[MONITOR] 设置CORS中间件...")
         self.app.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
@@ -84,20 +85,32 @@ class MonitorServer:
         
         # 挂载静态文件
         static_dir = Path("static")
+        print(f"[MONITOR] 检查静态文件目录: {static_dir.absolute()}")
         if static_dir.exists():
+            print(f"[MONITOR] 静态文件目录存在，挂载到/static")
             self.app.mount("/static", StaticFiles(directory="static"), name="static")
+        else:
+            print(f"[MONITOR] 警告: 静态文件目录不存在: {static_dir.absolute()}")
     
     def setup_routes(self):
         """设置路由"""
+        print("[MONITOR] 设置路由...")
         
         @self.app.get("/")
         async def root():
             """监控主页"""
-            return FileResponse('static/monitor.html')
+            monitor_html_path = Path('static/monitor.html')
+            print(f"[MONITOR] 请求根路径，返回: {monitor_html_path.absolute()}")
+            if monitor_html_path.exists():
+                return FileResponse('static/monitor.html')
+            else:
+                print(f"[MONITOR] 错误: monitor.html文件不存在: {monitor_html_path.absolute()}")
+                return {"error": "监控页面文件不存在"}
         
         @self.app.get("/api/stats")
         async def get_stats(force_refresh: bool = False):
             """获取API统计数据"""
+            print(f"[MONITOR] 请求API统计数据，force_refresh={force_refresh}")
             return await self.fetch_api_stats(force_refresh=force_refresh)
 
         
@@ -140,64 +153,33 @@ class MonitorServer:
                 self.remove_websocket(websocket)
                 logger.info(f"监控连接已清理，当前连接数: {len(self.websocket_connections)}")
     
-    async def fetch_api_stats(self, force_refresh: bool = False) -> Dict:
+    async def fetch_api_stats(self, force_refresh=False):
         """从主API服务器获取统计数据"""
-        current_time = time.time()
-        
-        # 检查缓存是否过期（除非强制刷新）
-        if not force_refresh and current_time - self.last_update < self.update_interval and self.stats_cache:
-            logger.debug("使用缓存的统计数据")
-            return self.stats_cache
-        
-        if force_refresh:
-            logger.info("强制刷新统计数据，跳过缓存")
-        
+        api_url = f"http://{self.api_host}:{self.api_port}/api/stats"
+        print(f"[MONITOR] 尝试获取API统计数据: {api_url}")
         try:
-            # 使用127.0.0.1而不是localhost，避免DNS解析问题
-            api_url = self.api_base_url.replace('localhost', '127.0.0.1')
-            
-            headers = {
-                "User-Agent": "MonitorServer/1.0",
-                "Accept": "application/json",
-                "Connection": "close"
-            }
-            
-            print(f"正在请求API统计数据: {api_url}/api/stats")
-            logger.info(f"正在请求API统计数据: {api_url}/api/stats")
-            
-            # 使用requests库进行同步请求
-            response = requests.get(
-                f"{api_url}/api/stats", 
-                timeout=10.0,
-                headers=headers,
-                proxies=None
-            )
-            
-            logger.info(f"API响应状态码: {response.status_code}")
-            logger.info(f"API响应头: {dict(response.headers)}")
-            
-            if response.status_code == 200:
-                self.stats_cache = response.json()
-                self.last_update = current_time
-                logger.debug("成功获取API统计数据")
-                return self.stats_cache
-            else:
-                logger.warning(f"API服务器返回错误状态码: {response.status_code}")
-                logger.warning(f"响应内容: {response.text[:200]}")
-                
-        except requests.exceptions.ConnectionError as e:
-            logger.error(f"无法连接到API服务器: {self.api_base_url}, 错误: {e}")
-        except requests.exceptions.Timeout:
-            logger.error("API服务器响应超时")
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                print(f"[MONITOR] 发送HTTP请求到: {api_url}")
+                response = await client.get(api_url)
+                response.raise_for_status()
+                data = response.json()
+                print(f"[MONITOR] 成功获取API统计数据: {len(str(data))} 字符")
+                return data
+        except httpx.ConnectError as e:
+            error_msg = f"无法连接到API服务器 {self.api_host}:{self.api_port}"
+            print(f"[MONITOR] 连接错误: {error_msg} - {e}")
+            logger.error(error_msg)
+            return {"error": error_msg}
+        except httpx.TimeoutException as e:
+            error_msg = "连接API服务器超时"
+            print(f"[MONITOR] 超时错误: {error_msg} - {e}")
+            logger.error(error_msg)
+            return {"error": error_msg}
         except Exception as e:
-            logger.error(f"获取统计数据失败: {e}")
-        
-        # 返回错误状态
-        return {
-            "error": "无法连接到API服务器",
-            "api_url": self.api_base_url.replace('localhost', '127.0.0.1'),
-            "timestamp": datetime.now().isoformat()
-        }
+            error_msg = f"获取API统计数据时发生错误: {e}"
+            print(f"[MONITOR] 未知错误: {error_msg}")
+            logger.error(error_msg)
+            return {"error": str(e)}
     
     async def send_stats_to_websocket(self, websocket: WebSocket):
         """向单个WebSocket连接发送统计数据"""
@@ -266,35 +248,58 @@ class MonitorServer:
 
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description='启动API监控服务器')
-    parser.add_argument('--port', type=int, default=8001, help='监控服务器端口 (默认: 8001)')
-    parser.add_argument('--host', type=str, default='0.0.0.0', help='监控服务器主机 (默认: 0.0.0.0)')
-    parser.add_argument('--api-host', type=str, default='0.0.0.0', help='API服务器主机 (默认: localhost)')
-    parser.add_argument('--api-port', type=int, default=8000, help='API服务器端口 (默认: 8000)')
-    args = parser.parse_args()
-    
-    # 创建监控服务器
-    monitor = MonitorServer(api_host=args.api_host, api_port=args.api_port)
-    
-    print("启动API监控服务器...")
-    print(f"监控服务器地址: http://localhost:{args.port}")
-    print(f"监控目标API: http://{args.api_host}:{args.api_port}")
-    print("按Ctrl+C停止服务器")
-    
-    # 启动后台任务
-    @monitor.app.on_event("startup")
-    async def startup_event():
-        await monitor.start_background_tasks()
-        logger.info("监控服务器启动完成")
-        print("监控服务器启动完成")  # 确保输出到stdout供父进程检测
-    
-    # 启动服务器
-    uvicorn.run(
-        monitor.app,
-        host=args.host,
-        port=args.port,
-        log_level="info"
-    )
+    try:
+        print("[MONITOR] 开始解析命令行参数...")
+        parser = argparse.ArgumentParser(description='启动API监控服务器')
+        parser.add_argument('--port', type=int, default=8001, help='监控服务器端口 (默认: 8001)')
+        parser.add_argument('--host', type=str, default='0.0.0.0', help='监控服务器主机 (默认: 0.0.0.0)')
+        parser.add_argument('--api-host', type=str, default='127.0.0.1', help='API服务器主机 (默认: 127.0.0.1)')
+        parser.add_argument('--api-port', type=int, default=8000, help='API服务器端口 (默认: 8000)')
+        args = parser.parse_args()
+        
+        print(f"[MONITOR] 参数解析完成: host={args.host}, port={args.port}, api_host={args.api_host}, api_port={args.api_port}")
+        
+        # 创建监控服务器
+        print("[MONITOR] 创建监控服务器实例...")
+        monitor = MonitorServer(api_host=args.api_host, api_port=args.api_port)
+        print("[MONITOR] 监控服务器实例创建成功")
+        
+        print("启动API监控服务器...")
+        print(f"监控服务器地址: http://localhost:{args.port}")
+        print(f"监控目标API: http://{args.api_host}:{args.api_port}")
+        print("按Ctrl+C停止服务器")
+        
+        # 启动后台任务
+        @monitor.app.on_event("startup")
+        async def startup_event():
+            print("[MONITOR] 启动事件触发，开始后台任务...")
+            
+            # 测试API服务器连接
+            print("[MONITOR] 测试API服务器连接...")
+            test_result = await monitor.fetch_api_stats()
+            if "error" in test_result:
+                print(f"[MONITOR] 警告: 无法连接到API服务器: {test_result['error']}")
+            else:
+                print("[MONITOR] API服务器连接测试成功")
+            
+            await monitor.start_background_tasks()
+            logger.info("监控服务器启动完成")
+            print("监控服务器启动完成")  # 确保输出到stdout供父进程检测
+        
+        print("[MONITOR] 准备启动uvicorn服务器...")
+        # 启动服务器
+        uvicorn.run(
+            monitor.app,
+            host=args.host,
+            port=args.port,
+            log_level="info"
+        )
+        
+    except Exception as e:
+        print(f"[MONITOR] 启动失败: {e}")
+        import traceback
+        print(f"[MONITOR] 错误详情: {traceback.format_exc()}")
+        raise
 
 
 if __name__ == "__main__":

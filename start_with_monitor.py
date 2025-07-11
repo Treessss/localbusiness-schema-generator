@@ -68,17 +68,25 @@ class ServiceManager:
     def wait_for_startup(self, process, service_name, timeout=30):
         """等待服务启动"""
         start_time = time.time()
+        output_lines = []
         
         while time.time() - start_time < timeout:
             if process.poll() is not None:
                 print(f"❌ {service_name}启动失败")
+                # 输出所有收集到的错误信息
+                if output_lines:
+                    print(f"[{service_name}] 错误详情:")
+                    for line in output_lines[-10:]:  # 显示最后10行
+                        print(f"[{service_name}] {line}")
                 return False
             
             # 检查是否有输出表明服务已启动
             try:
                 line = process.stdout.readline()
                 if line:
-                    print(f"[{service_name}] {line.strip()}")
+                    line_stripped = line.strip()
+                    output_lines.append(line_stripped)
+                    print(f"[{service_name}] {line_stripped}")
                     if ("Uvicorn running on" in line or 
                         "Application startup complete" in line or
                         "监控服务器启动完成" in line or
@@ -91,6 +99,11 @@ class ServiceManager:
             time.sleep(0.1)
         
         print(f"⏰ {service_name}启动超时")
+        # 输出超时时的错误信息
+        if output_lines:
+            print(f"[{service_name}] 超时前的输出:")
+            for line in output_lines[-10:]:  # 显示最后10行
+                print(f"[{service_name}] {line}")
         return False
     
     def monitor_processes(self):
