@@ -1,16 +1,17 @@
-# Use Python 3.11 slim image
+# 使用轻量级 Python 镜像
 FROM python:3.11-slim
 
-# Set environment variables
+EXPOSE 8081
+EXPOSE 8080
+
+# 设置环境变量
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
-    REDIS_URL=redis://redis:6379
+    REDIS_URL=redis://host.docker.internal:6379
 
-# Detect system architecture and install system dependencies
-RUN dpkg --print-architecture > /tmp/arch.txt && \
-    echo "Detected architecture: $(cat /tmp/arch.txt)" && \
-    apt-get update && apt-get install -y \
+# 安装系统依赖（需要root权限）
+RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
     ca-certificates \
@@ -34,44 +35,42 @@ RUN dpkg --print-architecture > /tmp/arch.txt && \
     xdg-utils \
     libu2f-udev \
     libvulkan1 \
-    redis-tools \
     && rm -rf /var/lib/apt/lists/*
 
-# Set work directory
+# 设置工作目录
 WORKDIR /app
 
-# Copy requirements first for better caching
+# 拷贝 requirements 先安装依赖
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers with system detection
-RUN echo "Installing Playwright for $(dpkg --print-architecture) architecture..." && \
-    playwright install chromium && \
+# 安装 Playwright 和浏览器（以root身份，安装到全局位置）
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN playwright install chromium && \
     playwright install-deps chromium && \
-    echo "Playwright installation completed for $(dpkg --print-architecture)"
+    chmod -R 755 /ms-playwright
 
-# Copy application code
+# 创建非 root 用户
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# 复制项目文件
 COPY . .
 
-# Create logs directory
-RUN mkdir -p logs
-
-# Create non-root user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser && \
+# 创建日志目录并设置权限
+RUN mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 
-# Switch to non-root user
+# 切换到非 root 用户运行应用
 USER appuser
 
-# Expose port
-EXPOSE 8000
+# 确保appuser也能访问Playwright浏览器
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-# Health check
+
+# 健康检查（防止容器假启动）
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/api/health')"
 
-# Wait for Redis and start application with monitor
-CMD ["sh", "-c", "echo 'Waiting for Redis...' && until redis-cli -h redis ping; do echo 'Redis not ready, waiting...'; sleep 2; done && echo 'Redis is ready!' && python start_with_monitor.py --api-host 0.0.0.0 --api-port 8000 --monitor-host 0.0.0.0 --monitor-port 8001"]
+# 启动命令
+CMD ["sh", "-c", "python start_with_monitor.py"]
