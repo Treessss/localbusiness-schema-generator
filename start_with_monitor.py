@@ -79,7 +79,10 @@ class ServiceManager:
                 line = process.stdout.readline()
                 if line:
                     print(f"[{service_name}] {line.strip()}")
-                    if "Uvicorn running on" in line or "Application startup complete" in line:
+                    if ("Uvicorn running on" in line or 
+                        "Application startup complete" in line or
+                        "监控服务器启动完成" in line or
+                        "INFO:     Started server process" in line):
                         print(f"✅ {service_name}启动成功")
                         return True
             except:
@@ -193,7 +196,7 @@ def main():
             monitor_process = manager.start_monitor_server(
                 args.monitor_host, 
                 args.monitor_port,
-                "localhost",  # 监控本地API服务器
+                "127.0.0.1",  # 监控本地API服务器
                 args.api_port
             )
             time.sleep(2)  # 等待监控服务器启动
@@ -205,11 +208,11 @@ def main():
         print("🎉 服务启动完成!")
         
         if not args.monitor_only:
-            print(f"📡 API服务器: http://localhost:{args.api_port}")
-            print(f"📚 API文档: http://localhost:{args.api_port}/docs")
+            print(f"📡 API服务器: http://0.0.0.0:{args.api_port}")
+            print(f"📚 API文档: http://0.0.0.0:{args.api_port}/docs")
 
         if not args.no_monitor:
-            print(f"🔍 监控中心: http://localhost:{args.monitor_port}")
+            print(f"🔍 监控中心: http://0.0.0.0:{args.monitor_port}")
         
         print("=" * 50)
         

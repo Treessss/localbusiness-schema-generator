@@ -269,7 +269,7 @@ def main():
     parser = argparse.ArgumentParser(description='启动API监控服务器')
     parser.add_argument('--port', type=int, default=8001, help='监控服务器端口 (默认: 8001)')
     parser.add_argument('--host', type=str, default='0.0.0.0', help='监控服务器主机 (默认: 0.0.0.0)')
-    parser.add_argument('--api-host', type=str, default='localhost', help='API服务器主机 (默认: localhost)')
+    parser.add_argument('--api-host', type=str, default='0.0.0.0', help='API服务器主机 (默认: localhost)')
     parser.add_argument('--api-port', type=int, default=8000, help='API服务器端口 (默认: 8000)')
     args = parser.parse_args()
     
@@ -286,6 +286,7 @@ def main():
     async def startup_event():
         await monitor.start_background_tasks()
         logger.info("监控服务器启动完成")
+        print("监控服务器启动完成")  # 确保输出到stdout供父进程检测
     
     # 启动服务器
     uvicorn.run(

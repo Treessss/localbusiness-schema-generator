@@ -45,15 +45,26 @@ logger.add(
 
 # 配置文件日志输出
 log_dir = Path("logs")
-log_dir.mkdir(exist_ok=True)  # 确保日志目录存在
-logger.add(
-    log_dir / "app.log",
-    rotation="1 day",  # 每天轮转一次
-    retention="30 days",  # 保留30天的日志
-    format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-    level="DEBUG",  # 文件日志记录更详细的信息
-    encoding="utf-8"  # 确保中文字符正确编码
-)
+try:
+    log_dir.mkdir(exist_ok=True)  # 确保日志目录存在
+    # 测试写入权限
+    test_file = log_dir / "test_write.tmp"
+    test_file.touch()
+    test_file.unlink()  # 删除测试文件
+    
+    logger.add(
+        log_dir / "app.log",
+        rotation="1 day",  # 每天轮转一次
+        retention="30 days",  # 保留30天的日志
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+        level="DEBUG",  # 文件日志记录更详细的信息
+        encoding="utf-8"  # 确保中文字符正确编码
+    )
+    logger.info("文件日志已启用")
+except PermissionError:
+    logger.warning("无法写入日志文件，仅使用控制台日志")
+except Exception as e:
+    logger.error(f"设置文件日志时出错: {e}，仅使用控制台日志")
 
 # 创建FastAPI应用
 app = FastAPI(
